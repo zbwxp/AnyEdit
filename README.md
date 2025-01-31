@@ -1,14 +1,12 @@
 # AlphaEdit
-- Code for [``AlphaEdit: Null-Space Constrained Knowledge Editing for Language Models``]
+- Code for [``AnyEdit: Edit Any Knowledge Encoded in Language Models``]
 
-- AlphaEdit minimizes disruption to the preserved knowledge by projecting parameter perturbations onto the null space of its key matrices. It then removes the output error related to it from the current objective, allowing the model to focus solely on knowledge update without trade-off.  By leveraging the mathematical properties of matrix projection and null space, AlphaEdit ensures that the distribution of hidden representations within LLMs remains invariant after edits. This invariance allows post-edited LLMs to effectively handle both knowledge update and preservation simultaneously.
-- AlphaEdit focuses on optimizing sequential editing from an objective standpoint. Additionally, we highly recommend our complementary work, [NSE](https://arxiv.org/abs/2410.04045), for readers interested in sequential editing. NSE enhances the process by optimizing both the retrieval of \(z\) values and the updating of weights \(W\), providing seamless integration with AlphaEdit.
+- In this work, we propose \textbf{AnyEdit}, a new autoregressive editing paradigm. It decomposes long-form knowledge into sequential chunks and iteratively edits the key token in each chunk, ensuring consistent and accurate outputs. Theoretically, we ground AnyEdit in the Chain Rule of Mutual Information, showing its ability to update any knowledge within LLMs. Empirically, it outperforms strong baselines by 21.5\% on benchmarks including UnKEBench, AKEW, and our new \textbf{EditEverything} dataset for long-form diverse-formatted knowledge. Additionally, AnyEdit serves as a plug-and-play framework, enabling current editing methods to update knowledge with arbitrary length and format, significantly advancing the scope and practicality of LLM knowledge editing.
 
 ![alt text](resource/alphaedit_fig.png)
-*Figure: This is the overall architecture of our AlphaEdit method.*
 
 ## Requirements
-**At least one A40 48G GPU.**
+**One A100 80G GPU.**
 
 - pytorch==1.12.1
 - einops==0.4.0
@@ -23,23 +21,22 @@
 - nltk==3.7
 
 ## Quick Start
-### An example for editing Llama3 (8B) on counterfact dataset using NSE
-#### 1. Edit Llama3 (8B) model 
+### An example for editing Llama3-8B-Instruct on UnKEBench dataset using AnyEdit
+#### 1. Edit Llama3-8B-Instruct 
  
-    python3 -m experiments.evaluate     --alg_name=AlphaEdit     --model_name=meta-llama/Meta-Llama-3-8B-Instruct     --hparams_fname=Llama3-8B.json --ds_name=mcf --dataset_size_limit=2000    --num_edits=100 --downstream_eval_steps=5
+    python3 -m experiments.evaluate_uns     --alg_name=MEMIT_ARE     --model_name=meta-llama/Meta-Llama-3-8B-Instruct     --hparams_fname=Llama3-8B-Instruct.json     --ds_name=unke     --dataset_size_limit=1000     --num_edits=1
 
 This command runs an evaluation script for the NSE algorithm using the Llama3-8b-instruct. Below are the explanations for each argument:
 
-- `--alg_name=NSE`: Specifies the name of the algorithm being used, which is NSE in this case.
+- `--alg_name=MEMIT_ARE`: Specifies the name of the algorithm being used, which is MEMIT+AnyEdit in this case.
 - `--model_name=meta-llama/Meta-Llama-3-8B-Instruct`: Indicates the name of the model being evaluated, here it is Llama-3-8B-Instruct.
-- `--hparams_fname=Llama3-8B.json`: Points to the JSON file containing hyperparameters specific to the Llama-3-8B-Instruct model.
-- `--ds_name=mcf`: Specifies the dataset name, in this case, "mcf".
-- `--dataset_size_limit=2000`: Sets the total number of editing samples to 2000.
-- `--num_edits=100`: Defines the batch size for each round of editing, meaning 100 edits will be performed in each batch. 
-- `--downstream_eval_steps=5`: indicates that a test of general capabilities is conducted after every 5 rounds of editing.
+- `--hparams_fname=Llama3-8B-Instruct.json`: Points to the JSON file containing hyperparameters specific to the Llama-3-8B-Instruct model.
+- `--ds_name=unke`: Specifies the dataset name, in this case, "unke".
+- `--dataset_size_limit=1000`: Sets the total number of editing samples to 2000.
+- `--num_edits=1`: Defines the batch size for each round of editing, meaning 1 edit will be performed in each batch. 
 #### 2. Summarize the results
 
-    python summarize.py --dir_name=AlphaEdit --runs=run_<run1>,run_<run2>
+    python -m experiments.summarize_uns --file_path=output/...
 
 ## Acknowledgment
-Our code is based on  [``MEMIT``](https://github.com/kmeng01/memit.git).
+Our code is based on  [``MEMIT``](https://github.com/kmeng01/memit.git) and  [``UnKE``](https://github.com/TrustedLLM/UnKE.git).
