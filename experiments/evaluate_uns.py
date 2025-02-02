@@ -97,8 +97,7 @@ def main(
         model, tok = model_name
         model_name = model.config._name_or_path
     ds_class = DS_DICT[ds_name]
-    ds = ds_class(DATA_DIR,tok=tok, model_name=hparams.model_name, size=dataset_size_limit)
-    print(ds.get_max_answer_token_count())
+    ds = ds_class(DATA_DIR, model_name=hparams.model_name, size=dataset_size_limit)
     with open(Path(DATA_DIR)/"alpaca_data.json", 'r', encoding='utf-8') as json_file:
         ex_datas = json.load(json_file)
     if hparams.model_name == 'Llama3-8B-Instruct':
