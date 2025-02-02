@@ -35,9 +35,8 @@ def get_list_qwen_without_answer(que, cot):
 
 class EditeveryDataset:
 
-    def __init__(self, data_dir: str, tok: AutoTokenizer, model_name: str, size=None, *args, **kwargs):
+    def __init__(self, data_dir: str, model_name: str, size=None, *args, **kwargs):
         data_dir = Path(data_dir)
-        self.tok = tok
         with open(data_dir/"editevery.json", 'r', encoding='utf-8') as json_file:
             raw = json.load(json_file)
         for i in raw:
@@ -56,11 +55,3 @@ class EditeveryDataset:
 
     def __len__(self):
         return len(self._data)
-    def get_max_answer_token_count(self):
-        max_count = 0
-        for sample in self._data:
-            answer = sample["answer"]
-            token_count = len(self.tok(answer)["input_ids"])
-            if token_count > max_count:
-                max_count = token_count
-        return max_count
