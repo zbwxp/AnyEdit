@@ -35,8 +35,7 @@ def get_list_qwen_without_answer(que, cot):
     return L
 class CounterFactDataset:
 
-    def __init__(self, data_dir: str,tok: AutoTokenizer, model_name: str, size=None, *args, **kwargs):
-        self.tok=tok
+    def __init__(self, data_dir: str, model_name: str, size=None, *args, **kwargs):
         data_dir = Path(data_dir)
         with open(data_dir/"AKEW"/"CounterFact.json", 'r', encoding='utf-8') as json_file:
             raw = json.load(json_file)
@@ -72,11 +71,3 @@ class CounterFactDataset:
 
     def __len__(self):
         return len(self._data)
-    def get_max_answer_token_count(self):
-        max_count = 0
-        for sample in self._data:
-            answer = sample["answer"]
-            token_count = len(self.tok(answer)["input_ids"])
-            if token_count > max_count:
-                max_count = token_count
-        return max_count
