@@ -7,7 +7,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from util import nethook
 from util.globals import *
 import torch.optim as optim
-from rome.layer_stats import layer_stats
+from util.layer_stats import layer_stats
 import argparse
 
 import numpy as np
