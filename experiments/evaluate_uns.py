@@ -11,8 +11,6 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
 import random
-from baselines.ft import FTHyperParams, apply_ft_to_model
-from baselines.mend import MENDHyperParams, MendRewriteExecutor
 from dsets import (
     UnKEDataset,
     CounterFactDataset,
@@ -26,8 +24,6 @@ from AlphaEdit import AlphaEditHyperParams,apply_AlphaEdit_to_model,get_cov
 from AlphaEdit_ARE import AlphaEditAREHyperParams,apply_AlphaEdit_ARE_to_model
 from unke import unkeHyperParams, apply_unke_to_model
 from unke_ARE import unkeAREHyperParams, apply_unke_ARE_to_model
-
-from rome import ROMEHyperParams, apply_rome_to_model
 from util import nethook
 from util.globals import *
 from glue_eval.glue_eval import GLUEEval
@@ -38,9 +34,6 @@ ALG_DICT = {
     "AlphaEdit": (AlphaEditHyperParams, apply_AlphaEdit_to_model),
     "MEMIT_ARE": (MEMITAREHyperParams, apply_memit_ARE_to_model),
     "MEMIT": (MEMITHyperParams, apply_memit_to_model),
-    "ROME": (ROMEHyperParams, apply_rome_to_model),
-    "FT": (FTHyperParams, apply_ft_to_model),
-    "MEND": (MENDHyperParams, MendRewriteExecutor().apply_to_model),
 }
 
 DS_DICT = {
