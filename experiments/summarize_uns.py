@@ -6,7 +6,6 @@ from tqdm import tqdm
 import argparse
 import sys
 import os
-os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 sys.setrecursionlimit(2000)
 def calculate_metrics(data):
     for i in data:
@@ -58,7 +57,6 @@ if __name__ == "__main__":
     
 
     if ds_name == "editevery":
-        # 按category分组数据
         category_data = {}
         for item in data:
             category = item['category']
