@@ -40,3 +40,23 @@ This command runs an evaluation script for the NSE algorithm using the Llama3-8b
 
 ## Acknowledgment
 Our code is based on  [``MEMIT``](https://github.com/kmeng01/memit.git) and  [``UnKE``](https://github.com/TrustedLLM/UnKE.git).
+
+## Citation
+
+If you find this work useful, please cite our paper:
+
+```bibtex
+@article{anyedit,
+  author       = {Houcheng Jiang and
+                  Junfeng Fang and
+                  Ningyu Zhang and
+                  Guojun Ma and
+                  Mingyang Wan and
+                  Xiang Wang and
+                  Xiangnan He and
+                  Tat{-}Seng Chua},
+  title        = {AnyEdit: Edit Any Knowledge Encoded in Language Models},
+  journal      = {CoRR},
+  volume       = {abs/2502.05628},
+  year         = {2025}
+}
