@@ -107,7 +107,7 @@ def apply_AlphaEdit_ARE_to_model(
 
         cur_zs = compute_ks(model, tok,batch_question_ans, hparams, z_layer, idxs_dict)
         targets = zs - cur_zs
-        print("z error", torch.linalg.norm(targets, dim=0).mean())
+        # print("z error", torch.linalg.norm(targets, dim=0).mean())
         # ex_tok = tok(ex_data, padding=True, return_tensors="pt").to(
         #     next(model.parameters()).device
         # )
@@ -125,14 +125,20 @@ def apply_AlphaEdit_ARE_to_model(
 
 
         resid = targets / (len(hparams.layers) - i)  # Distribute residual across layers
+        # Convert to float32 for computation, then back to float16
+        # P_float32 = P.float()
+        # resid_float32 = resid.float()
+        layer_ks_float32 = layer_ks.float()
+        layer_kp_float32 = layer_kp.float()
+
         upd_matrix = torch.linalg.solve(
-                P[i,:,:].cuda() @ (layer_ks @ layer_ks.T + layer_kp @ layer_kp.T)  + hparams.L2*torch.eye(layer_ks.shape[0], dtype=torch.float,device="cuda"), P[i,:,:].cuda() @ layer_ks @ resid.T
-        )
+                P[i,:,:].cuda() @ (layer_ks_float32 @ layer_ks_float32.T + layer_kp_float32 @ layer_kp_float32.T)  + hparams.L2*torch.eye(layer_ks_float32.shape[0], dtype=torch.float,device="cuda"), P[i,:,:].cuda() @ layer_ks_float32 @ resid.T
+        ).half()
         # Adjust update matrix shape
         weight_name = f"{hparams.rewrite_module_tmp.format(layer)}.weight"
         upd_matrix = upd_matrix_match_shape(upd_matrix, weights[weight_name].shape)
-        print("orig norm", torch.linalg.norm(weights[weight_name]))
-        print("upd norm", torch.linalg.norm(upd_matrix))
+        # print("orig norm", torch.linalg.norm(weights[weight_name]))
+        # print("upd norm", torch.linalg.norm(upd_matrix))
 
         # Update model weights and record desired changes in `delta` variable
         with torch.no_grad():

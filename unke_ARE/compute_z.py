@@ -105,6 +105,10 @@ def compute_z(
 
             if cur_layer == hparams.layer_module_tmp.format(layer):
                 
+                # If transformers returns a tensor (4.56), wrap it to mimic old tuple behavior
+                if isinstance(cur_out, torch.Tensor):
+                    cur_out = (cur_out, None)
+
                 if target_init is None:
                 
                     target_init = cur_out[0][0, lookup_idxs[0]].detach().clone()

@@ -1,0 +1,87 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "name": "anyedit-memit",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/root/code/AnyEdit/experiments/evaluate_uns.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--alg_name=MEMIT_ARE",
+                "--model_name=meta-llama/Meta-Llama-3-8B-Instruct",
+                "--hparams_fname=Llama3-8B-Instruct.json",
+                "--ds_name=unke",
+                "--dataset_size_limit=1000",
+                "--num_edits=1"
+            ],
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "anyedit-alpha",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/root/code/AnyEdit/experiments/evaluate_uns.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--alg_name=AlphaEdit_ARE",
+                "--model_name=meta-llama/Meta-Llama-3-8B-Instruct",
+                "--hparams_fname=Llama3-8B-Instruct.json",
+                "--ds_name=unke",
+                "--dataset_size_limit=1000",
+                "--num_edits=1"
+            ],
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+                {
+            "name": "anyedit-alpha_sequencial",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/root/code/AnyEdit/experiments/evaluate_uns.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--alg_name=AlphaEdit_ARE",
+                "--model_name=meta-llama/Meta-Llama-3-8B-Instruct",
+                "--hparams_fname=Llama3-8B-Instruct.json",
+                "--ds_name=unke",
+                "--dataset_size_limit=1000",
+                "--num_edits=1",
+                "--sequential"
+            ],
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "anyedit-unke",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/root/code/AnyEdit/experiments/evaluate_uns.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--alg_name=unke_ARE",
+                "--model_name=meta-llama/Meta-Llama-3-8B-Instruct",
+                "--hparams_fname=Llama3-8B-Instruct.json",
+                "--ds_name=unke",
+                "--dataset_size_limit=1000",
+                "--num_edits=1"
+            ],
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "CUDA_LAUNCH_BLOCKING": "1"
+            }
+        },
+    ]
+}

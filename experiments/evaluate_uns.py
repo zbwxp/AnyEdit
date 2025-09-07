@@ -26,7 +26,7 @@ from unke import unkeHyperParams, apply_unke_to_model
 from unke_ARE import unkeAREHyperParams, apply_unke_ARE_to_model
 from util import nethook
 from util.globals import *
-from glue_eval.glue_eval import GLUEEval
+# from glue_eval.glue_eval import GLUEEval
 ALG_DICT = {
     "unke_ARE": (unkeAREHyperParams, apply_unke_ARE_to_model),
     "unke": (unkeHyperParams, apply_unke_to_model),
@@ -83,7 +83,12 @@ def main(
     # Instantiate vanilla model
     if type(model_name) is str:
         print("Instantiating model")
-        model = AutoModelForCausalLM.from_pretrained(model_name).cuda()
+        model_name = "/root/code/AnyEdit/meta-llama/llama-3-8b-instruct"
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            torch_dtype=torch.float16,
+            ).cuda()
+
         tok = AutoTokenizer.from_pretrained(model_name)
         tok.pad_token = tok.eos_token
     else:
@@ -115,16 +120,40 @@ def main(
     num_batches = len(ds) // batch_size + (1 if len(ds) % batch_size else 0)
     edited_data = []
 
-    for batch_index in tqdm(range(num_batches)):
+    # Prepare output path and ensure directory exists for incremental dumps
+    if sequential:
+        path = f'output/{alg_name}_{hparams.model_name}_sequential_{ds_name}_result.json'
+    else:
+        path = f'output/{alg_name}_{hparams.model_name}_{ds_name}_result.json'
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    # Resume support: load existing results if present
+    resume_count = 0
+    if os.path.exists(path):
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                existing = json.load(f)
+            if isinstance(existing, list):
+                edited_data = existing
+                resume_count = len(edited_data)
+                print(f"Resuming from {resume_count} existing results in {path}")
+        except Exception as e:
+            print(f"Could not load existing results from {path}: {e}")
+
+    # For non-sequential mode, skip completed batches
+    start_batch_index = (resume_count // batch_size) if not sequential else 0
+
+
+    for batch_index in tqdm(range(start_batch_index, num_batches)):
         start_index = batch_index * batch_size
         end_index = start_index + batch_size
         batch = ds[start_index:end_index]
         random_elements = random.sample(ex_datas, 20)
         # case_result_template = str(run_dir / "{}_edits-case_{}.json")
-       
+
         ex_args = dict(ex_data = random_elements) if any(alg in alg_name for alg in ["unke", "unke_ARE"]) else dict()
         nc_args = dict(P = P) if any(alg in alg_name for alg in ["AlphaEdit","AlphaEdit_ARE"]) else dict()
- 
+
         start = time()
         if any(alg in alg_name for alg in ["unke", "unke_ARE","MEMIT","MEMIT_ARE","AlphaEdit","AlphaEdit_ARE"]):
             weights_copy = apply_algo(model, tok, hparams, batch, **ex_args, **nc_args)
@@ -138,7 +167,7 @@ def main(
                     question = tokenizer([data['question'],data['para_question']], return_tensors='pt', padding=True)
                 else:
                     question = tokenizer([data['question']], return_tensors='pt', padding=True)
-                #print(question.input_ids) 
+                #print(question.input_ids)
                 with torch.no_grad():
                     generated_ids = model.generate(
                     input_ids=question['input_ids'].to('cuda'),
@@ -151,12 +180,12 @@ def main(
                     output_ids[len(input_ids):] for input_ids, output_ids in zip(question['input_ids'], generated_ids)
                 ]
                 output = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
-                if batch_index < 10 // batch_size + 1:
-                    print(f"question:{data['question']}")
-                    print(output[0])
-                    if ds_name in ['unke','cf']:
-                        print(f"question:{data['para_question']}")
-                        print(output[1])
+                # if batch_index < 10 // batch_size + 1:
+                    # print(f"question:{data['question']}")
+                    # print(output[0])
+                    # if ds_name in ['unke','cf']:
+                    #     print(f"question:{data['para_question']}")
+                    #     print(output[1])
                 data['original_prediction'] = output[0]
                 if ds_name in ['unke','cf']:
                     data['para_prediction'] = output[1]
@@ -187,18 +216,51 @@ def main(
                     #     print(output)
 
                     data['sub_pred'] = output
-         
+
             edited_data.extend(batch)
             with torch.no_grad():
                 for k, v in weights_copy.items():
                     nethook.get_parameter(model, k)[...] = v.to("cuda")
+
+            # inference again to get the vanilla prediction
+            for data in batch:
+                if ds_name in ['unke','cf']:
+                    question = tokenizer([data['question'],data['para_question']], return_tensors='pt', padding=True)
+                else:
+                    question = tokenizer([data['question']], return_tensors='pt', padding=True)
+                    # print(question.input_ids)
+                with torch.no_grad():
+                    generated_ids = model.generate(
+                        input_ids=question['input_ids'].to('cuda'),
+                        attention_mask=question['attention_mask'].to('cuda'),
+                        do_sample=True,
+                        temperature=0.001,# Analysis exp
+                        max_new_tokens=512
+                    )
+
+                generated_ids = [
+                    output_ids[len(input_ids):] for input_ids, output_ids in zip(question['input_ids'], generated_ids)
+                ]
+                output = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
+                data['vanilla_prediction'] = output[0]
+                data['vanilla_para_prediction'] = output[1]
+
+            # Incremental dump after each batch iteration (after vanilla predictions)
+            with open(path, 'w', encoding='utf-8') as json_file:
+                json.dump(edited_data, json_file, ensure_ascii=False, indent=4)
+            print("=============================================")
+            current_id = edited_data[-1]['id']
+            print(f"Batch {batch_index} done, {current_id} is the last example saved to {path}")
+            print("=============================================")
+
+
     if sequential:
-        for data in ds:
+        for data in ds[resume_count:]:
             if ds_name in ['unke','cf']:
                 question = tokenizer([data['question'],data['para_question']], return_tensors='pt', padding=True)
             else:
                 question = tokenizer([data['question']], return_tensors='pt', padding=True)
-            #print(question.input_ids) 
+            #print(question.input_ids)
             with torch.no_grad():
                 generated_ids = model.generate(
                 input_ids=question['input_ids'].to('cuda'),
@@ -225,7 +287,7 @@ def main(
             elif hparams.model_name == 'Qwen2.5-7B-Instruct':
                 data['answer'] = data['answer'][:-len('<|im_end|>')]
         if ds_name in ['unke','cf','mquake']:
-            for data in ds:
+            for data in ds[resume_count:]:
                 question = tokenizer(data['sub_question'], return_tensors='pt', padding=True)
                 with torch.no_grad():
                     generated_ids = model.generate(
@@ -247,16 +309,14 @@ def main(
                 #     print(output)
 
                 data['sub_pred'] = output
-        
-        edited_data.extend(ds)
-    if sequential:
-        path = f'output/{alg_name}_{hparams.model_name}_sequential_{ds_name}_result.json'
-    else:
-        path = f'output/{alg_name}_{hparams.model_name}_{ds_name}_result.json'
-    with open(path, 'w', encoding='utf-8') as json_file: 
-        json.dump(edited_data, json_file, ensure_ascii=False, indent=4)
-    
-    print(f"saving to {path}")
+
+        edited_data.extend(ds[resume_count:])
+        # Final dump for sequential mode (non-sequential already dumps per batch above)
+        with open(path, 'w', encoding='utf-8') as json_file:
+            json.dump(edited_data, json_file, ensure_ascii=False, indent=4)
+        print("=============================================")
+        print(f"Sequential mode done, {len(edited_data)} examples saved to {path}")
+        print("=============================================")
 
     print("Evaluation took", time() - start)
 def get_project(model, tok, layer, hparams):
