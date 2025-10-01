@@ -83,8 +83,14 @@ def apply_AlphaEdit_ARE_to_model(
     batch_question_ans = [
         i['question'] + i['answer'] for i in batch_data
     ]
+
+    # NOTE: ablation study, use batch_question instead of batch_question_ans
+    batch_question = [i['question'] for i in batch_data]
+    batch_question_ans = batch_question
     
     # Insert
+    per_layer_dict = {}
+
     for i, layer in enumerate(hparams.layers):
         #print(f"\n\nLAYER {layer}\n")
         contexts_tok = tok(batch_question_ans, padding=True, return_tensors="pt").to(
@@ -95,14 +101,14 @@ def apply_AlphaEdit_ARE_to_model(
                 module=model,
                 layer=hparams.rewrite_module_tmp.format(layer),
                 retain_input=True,
-                retain_output=True,
+                retain_output=False,
                 detach=True,
                 clone=True,
             ) as tr:
                 _ = model(**contexts_tok)
                 layer_in_ks = tr.input #(bs:seq:h_dim)
-                layer_out_ks = tr.output#(bs:seq:h_dim)
-        layer_out_ks = layer_out_ks[0] if type(layer_out_ks) is tuple else layer_out_ks
+                # layer_out_ks = tr.output#(bs:seq:h_dim)
+        # layer_out_ks = layer_out_ks[0] if type(layer_out_ks) is tuple else layer_out_ks
         
 
         cur_zs = compute_ks(model, tok,batch_question_ans, hparams, z_layer, idxs_dict)
@@ -133,18 +139,34 @@ def apply_AlphaEdit_ARE_to_model(
 
         upd_matrix = torch.linalg.solve(
                 P[i,:,:].cuda() @ (layer_ks_float32 @ layer_ks_float32.T + layer_kp_float32 @ layer_kp_float32.T)  + hparams.L2*torch.eye(layer_ks_float32.shape[0], dtype=torch.float,device="cuda"), P[i,:,:].cuda() @ layer_ks_float32 @ resid.T
+                # P[i,:,:].cuda() @ (layer_ks_float32 @ layer_ks_float32.T)  + hparams.L2*torch.eye(layer_ks_float32.shape[0], dtype=torch.float,device="cuda"), P[i,:,:].cuda() @ layer_ks_float32 @ resid.T
         ).half()
         # Adjust update matrix shape
         weight_name = f"{hparams.rewrite_module_tmp.format(layer)}.weight"
         upd_matrix = upd_matrix_match_shape(upd_matrix, weights[weight_name].shape)
         # print("orig norm", torch.linalg.norm(weights[weight_name]))
         # print("upd norm", torch.linalg.norm(upd_matrix))
+        per_layer_dict[layer] = {
+            "cur_zs_mean":cur_zs.mean().item(),
+            "curr_zs_sum()":cur_zs.sum().item(),
+            "targets_mean":targets.mean().item(),
+            "targets_sum":targets.sum().item(),
+            "layer_ks_float32.sum()":layer_ks_float32.sum().item(),
+            "layer_ks_float32.mean()":layer_ks_float32.mean().item(),
+            "resid_sum":resid.sum().item(),
+            "resid_mean":resid.mean().item(),
+            "upd_sum":upd_matrix.sum().item(),
+            "upd_norm":torch.linalg.norm(upd_matrix).item(),
+            "upd_max":upd_matrix.max().item(),
+            "upd_min":upd_matrix.min().item(),
+        }
 
         # Update model weights and record desired changes in `delta` variable
         with torch.no_grad():
             weights[weight_name][...] = weights_copy[weight_name] + upd_matrix.float()
         # Clear GPU memory
-        for x in [layer_ks,layer_kp, cur_zs, targets, layer_in_ks, layer_out_ks,P]:
+        # for x in [layer_ks,layer_kp, cur_zs, targets, layer_in_ks, layer_out_ks,P]:
+        for x in [layer_ks,layer_kp, cur_zs, targets, layer_in_ks,P]:
             x.cpu()
             del x
         torch.cuda.empty_cache()

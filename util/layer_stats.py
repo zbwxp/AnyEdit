@@ -1,13 +1,23 @@
 import os
 from pathlib import Path
 import torch
-from datasets import load_dataset
+from datasets import load_dataset, load_from_disk
 from tqdm.auto import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from util.globals import *
 from util.nethook import Trace, set_requires_grad
-from util.runningstats import CombinedStat, Mean, NormMean, SecondMoment, tally
+from util.runningstats import (
+    CombinedStat,
+    Mean,
+    NormMean,
+    SecondMoment,
+    tally,
+    save_cached_state,
+    load_cached_state,
+    make_loader,
+    FixedSubsetSampler,
+)
 
 from .tok_dataset import (
     TokenizedDataset,
@@ -98,10 +108,15 @@ def layer_stats(
         # from datasets import Dataset
         # raw_ds = Dataset.from_file('data/wikipedia-train.arrow')
         # raw_ds = {'train': raw_ds}
-        raw_ds = load_dataset(
-            ds_name,
-            dict(wikitext="wikitext-103-raw-v1", wikipedia="20220301.en")[ds_name]
-        )
+        # raw_ds = load_dataset(
+        #     ds_name,
+        #     dict(wikitext="wikitext-103-raw-v1", wikipedia="20220301.en")[ds_name]
+        # )
+        path_map = {
+            "wikipedia": "/root/code/AnyEdit/wiki/wikipedia-20220301.en",
+            "wikitext": "/root/code/AnyEdit/wiki/wikitext-103-raw-v1",
+        }
+        raw_ds = load_from_disk(path_map['wikipedia'])
         if hasattr(model.config, 'n_positions'):
             maxlen = model.config.n_positions
         elif hasattr(model.config, 'max_sequence_length'):
@@ -112,7 +127,7 @@ def layer_stats(
             maxlen = model.config.seq_length
         else:
             raise NotImplementedError
-                
+
         if hasattr(model.config, 'model_type') and 'mistral' in model.config.model_type:
             if hasattr(model.config, 'sliding_window') and model.config.sliding_window:
                 maxlen = model.config.sliding_window or 4096
@@ -137,7 +152,7 @@ def layer_stats(
         npos = model.config.seq_length
     else:
         raise NotImplementedError
-        
+
     if hasattr(model.config, 'model_type') and 'mistral' in model.config.model_type:
         if hasattr(model.config, 'sliding_window') and model.config.sliding_window:
             npos = model.config.sliding_window or 4096
@@ -164,35 +179,83 @@ def layer_stats(
 
     print(f"Computing Cov locally....")
 
-    ds = get_ds() if not filename.exists() else None
+    # Always build dataset (we support resuming from checkpoints)
+    ds = get_ds()
     if progress is None:
         progress = lambda x: x
 
+    # Initialize stat and attempt to resume from checkpoint
     stat = CombinedStat(**{k: STAT_TYPES[k]() for k in to_collect})
-    loader = tally(
-        stat,
+    processed = 0
+    ckpt = load_cached_state(str(filename), args={}, quiet=True)
+    if ckpt is not None:
+        try:
+            stat.load_state_dict(ckpt)
+            processed = int(ckpt.get("processed", 0))
+            print(f"Resuming from checkpoint: processed={processed}")
+        except Exception as e:
+            print(f"Warning: could not load checkpoint state ({e}); starting fresh.")
+            processed = 0
+
+    total_size = (sample_size or len(ds))
+    if processed >= total_size and not force_recompute:
+        print(f"Cached stats complete at {filename}.")
+        return stat
+
+    # Build loader over remaining subset
+    start_index = processed
+    end_index = total_size
+    sampler = FixedSubsetSampler(list(range(start_index, end_index)))
+    loader = make_loader(
         ds,
-        cache=(filename if not force_recompute else None),
-        sample_size=sample_size,
+        sampler=sampler,
         batch_size=batch_size,
         collate_fn=length_collation(batch_tokens),
         pin_memory=True,
-        random_sample=1,
         num_workers=2,
     )
-    batch_count = -(-(sample_size or len(ds)) // batch_size)
+
+    # Move running statistics to GPU to match computed features
+    try:
+        stat.to_("cuda")
+    except Exception as e:
+        print(f"Warning: could not move stat to CUDA: {e}")
+
+
+    remaining = end_index - start_index
+    batch_count = -(-remaining // batch_size)
+    save_every_groups = 1  # periodic checkpoint frequency (in groups)
+
     with torch.no_grad():
+        group_idx = 0
         for batch_group in progress(loader, total=batch_count):
+            group_idx += 1
+            group_n = 0
             for batch in batch_group:
+                group_n += int(batch["input_ids"].shape[0])
                 batch = dict_to_(batch, "cuda")
                 with Trace(
                     model, layer_name, retain_input=True, retain_output=False, stop=True
                 ) as tr:
                     model(**batch)
                 feats = flatten_masked_batch(tr.input, batch["attention_mask"])
-                # feats = flatten_masked_batch(tr.output, batch["attention_mask"])
                 feats = feats.to(dtype=dtype)
                 stat.add(feats)
+            processed += group_n
+
+            # Periodic save
+            if (group_idx % save_every_groups == 0) or (processed >= total_size):
+                try:
+                    save_cached_state(str(filename), stat, {"processed": processed, "total": total_size})
+                    print(f"Saved checkpoint at processed={processed}")
+                except Exception as e:
+                    print(f"Warning: periodic save failed at processed={processed}: {e}")
+
+    # Final save
+    try:
+        save_cached_state(str(filename), stat, {"processed": total_size, "total": total_size})
+    except Exception as e:
+        print(f"Warning: final save failed: {e}")
     return stat
 
 if __name__ == "__main__":

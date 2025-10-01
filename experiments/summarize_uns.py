@@ -44,7 +44,12 @@ def calculate_metrics(data):
     return temp_original
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--file_path', default='output/unke_Llama3-8B-Instruct_cf_result.json', type=str)
+    # parser.add_argument('--file_path', default='output/unke_Llama3-8B-Instruct_cf_result.json', type=str)
+    # parser.add_argument('--file_path', default='output/AlphaEdit_ARE_Llama3-8B-Instruct_unke_result.json', type=str)
+    # parser.add_argument('--file_path', default='output/AlphaEdit_ARE_Qwen2.5-7B-Instruct_unke_result.json', type=str)
+    # parser.add_argument('--file_path', default='output/AlphaEdit_ARE_Qwen2.5-7B-Instruct_icl_unke_result.json', type=str)
+    # parser.add_argument('--file_path', default='output/AlphaEdit_Qwen2.5-7B-Instruct_unke_result.json', type=str)
+    parser.add_argument('--file_path', default='output/AlphaEdit_ARE_Qwen3-4B-Instruct-2507_icl_unke_result.json', type=str)
     parser.add_argument('--model_path', default='sentence-transformers/all-MiniLM-L6-v2', type=str)
     parser.add_argument('--device', default=0, type=int)
 
@@ -102,6 +107,12 @@ if __name__ == "__main__":
         rouge1s_sub=[]
         rouge2s_sub=[]
         rouge = Rouge()
+
+        # use vanilla prediction to replace original prediction
+        # for i in data:
+        #     i['original_prediction'] = i['vanilla_prediction']
+        #     i['para_prediction'] = i['vanilla_para_prediction']
+        #     i['sub_pred'] = i['vanilla_sub_pred']
 
         for index in tqdm(range(len(data)),desc='Calculate BLEU&ROUGE Score'):
             score = sentence_bleu([data[index]['answer']], data[index]['original_prediction'])
@@ -174,9 +185,22 @@ if __name__ == "__main__":
         if ds_name in ['unke','cf']:
             matrics['Para']=temp_para
         matrics['Sub']=temp_sub
-        # temp_result = [bleu_scores,bleu_scores_para,rouge1s,rouge1s_para,rouge2s,rouge2s_para,rougels,rougels_para,temp_bert_score,temp_bert_score_para]
-        # with open('data_memit.json', 'w') as file:
-        #     json.dump(temp_result, file)
+        temp_result = [
+            {
+                "bleu_scores": bleu_scores,
+                "bleu_scores_para": bleu_scores_para,
+                "rouge1s": rouge1s,
+                "rouge1s_para": rouge1s_para,
+                "rouge2s": rouge2s,
+                "rouge2s_para": rouge2s_para,
+                "rougels": rougels,
+                "rougels_para": rougels_para,
+                "temp_bert_score": temp_bert_score,
+                "temp_bert_score_para": temp_bert_score_para,
+            }
+        ]
+        with open('data_qwen2.5_icl.json', 'w') as file:
+            json.dump(temp_result, file)
         print("***********Result**************")
         print(matrics)
 

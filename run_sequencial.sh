@@ -20,4 +20,3 @@ python experiments/evaluate_uns.py \
   --ds_name=unke \
   --dataset_size_limit=1000 \
   --num_edits=1 \
-  --sequential

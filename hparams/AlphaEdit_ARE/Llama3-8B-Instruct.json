@@ -22,6 +22,6 @@
     "mom2_dtype": "float32",
     "nullspace_threshold":2e-2,
     "L2":10,
-    "window_size": 40,
+    "window_size": 20000,
     "overlap": 0
 }

@@ -83,7 +83,11 @@ def main(
     # Instantiate vanilla model
     if type(model_name) is str:
         print("Instantiating model")
-        model_name = "/root/code/AnyEdit/meta-llama/llama-3-8b-instruct"
+        if "Llama" in hparams.model_name:
+            model_name = f"/root/code/AnyEdit/meta-llama/{hparams.model_name}"
+        elif "Qwen" in hparams.model_name:
+            model_name = f"/root/code/AnyEdit/qwen/{hparams.model_name}"
+
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
             torch_dtype=torch.float16,
@@ -95,7 +99,7 @@ def main(
         model, tok = model_name
         model_name = model.config._name_or_path
     ds_class = DS_DICT[ds_name]
-    ds = ds_class(DATA_DIR, model_name=hparams.model_name, size=dataset_size_limit)
+    ds = ds_class(DATA_DIR, model_name=hparams.model_name, size=dataset_size_limit, tokenizer=tok)
     with open(Path(DATA_DIR)/"alpaca_data.json", 'r', encoding='utf-8') as json_file:
         ex_datas = json.load(json_file)
     if hparams.model_name == 'Llama3-8B-Instruct':
@@ -222,28 +226,28 @@ def main(
                 for k, v in weights_copy.items():
                     nethook.get_parameter(model, k)[...] = v.to("cuda")
 
-            # inference again to get the vanilla prediction
-            for data in batch:
-                if ds_name in ['unke','cf']:
-                    question = tokenizer([data['question'],data['para_question']], return_tensors='pt', padding=True)
-                else:
-                    question = tokenizer([data['question']], return_tensors='pt', padding=True)
-                    # print(question.input_ids)
-                with torch.no_grad():
-                    generated_ids = model.generate(
-                        input_ids=question['input_ids'].to('cuda'),
-                        attention_mask=question['attention_mask'].to('cuda'),
-                        do_sample=True,
-                        temperature=0.001,# Analysis exp
-                        max_new_tokens=512
-                    )
+            # # inference again to get the vanilla prediction
+            # for data in batch:
+            #     if ds_name in ['unke','cf']:
+            #         question = tokenizer([data['question'],data['para_question']], return_tensors='pt', padding=True)
+            #     else:
+            #         question = tokenizer([data['question']], return_tensors='pt', padding=True)
+            #         # print(question.input_ids)
+            #     with torch.no_grad():
+            #         generated_ids = model.generate(
+            #             input_ids=question['input_ids'].to('cuda'),
+            #             attention_mask=question['attention_mask'].to('cuda'),
+            #             do_sample=True,
+            #             temperature=0.001,# Analysis exp
+            #             max_new_tokens=512
+            #         )
 
-                generated_ids = [
-                    output_ids[len(input_ids):] for input_ids, output_ids in zip(question['input_ids'], generated_ids)
-                ]
-                output = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
-                data['vanilla_prediction'] = output[0]
-                data['vanilla_para_prediction'] = output[1]
+            #     generated_ids = [
+            #         output_ids[len(input_ids):] for input_ids, output_ids in zip(question['input_ids'], generated_ids)
+            #     ]
+            #     output = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
+            #     data['vanilla_prediction'] = output[0]
+            #     data['vanilla_para_prediction'] = output[1]
 
             # Incremental dump after each batch iteration (after vanilla predictions)
             with open(path, 'w', encoding='utf-8') as json_file:
@@ -332,6 +336,7 @@ def get_project(model, tok, layer, hparams):
         hparams.mom2_dtype,
         force_recompute=force_recompute,
     ).cpu()
+    cov = cov.to('cuda')
     U, S, _ = torch.linalg.svd(cov, full_matrices=False)
     threshold = hparams.nullspace_threshold
     small_singular_indices = (S < threshold).nonzero(as_tuple=True)[0]

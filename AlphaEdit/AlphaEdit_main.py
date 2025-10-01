@@ -98,38 +98,40 @@ def apply_AlphaEdit_to_model(
             ) as tr:
                 _ = model(**contexts_tok)
                 layer_in_ks = tr.input #(bs:seq:h_dim)
-                layer_out_ks = tr.output#(bs:seq:h_dim)
-        layer_out_ks = layer_out_ks[0] if type(layer_out_ks) is tuple else layer_out_ks
+                # layer_out_ks = tr.output#(bs:seq:h_dim)
+        # layer_out_ks = layer_out_ks[0] if type(layer_out_ks) is tuple else layer_out_ks
         
 
         cur_zs, idxs = compute_ks(model, tok,batch_question, hparams, z_layer)
         targets = zs - cur_zs
-        print("z error", torch.linalg.norm(targets, dim=0).mean())
+        # print("z error", torch.linalg.norm(targets, dim=0).mean())
         # ex_tok = tok(ex_data, padding=True, return_tensors="pt").to(
         #     next(model.parameters()).device
         # )
         ks_list = []
-        for i in range(len(idxs)):
-            ks_list.append(layer_in_ks[i,idxs[i]])
+        for k in range(len(idxs)):
+            ks_list.append(layer_in_ks[k,idxs[k]])
         layer_ks = torch.stack(ks_list, dim=1)
 
 
 
         resid = targets / (len(hparams.layers) - i)  # Distribute residual across layers
+        layer_ks = layer_ks.float()
         upd_matrix = torch.linalg.solve(
                 P[i,:,:].cuda() @ (layer_ks @ layer_ks.T)  + hparams.L2*torch.eye(layer_ks.shape[0], dtype=torch.float,device="cuda"), P[i,:,:].cuda() @ layer_ks @ resid
-        )
+        ).half()
         # Adjust update matrix shape
         weight_name = f"{hparams.rewrite_module_tmp.format(layer)}.weight"
         upd_matrix = upd_matrix_match_shape(upd_matrix, weights[weight_name].shape)
-        print("orig norm", torch.linalg.norm(weights[weight_name]))
-        print("upd norm", torch.linalg.norm(upd_matrix))
+        # print("orig norm", torch.linalg.norm(weights[weight_name]))
+        # print("upd norm", torch.linalg.norm(upd_matrix))
 
         # Update model weights and record desired changes in `delta` variable
         with torch.no_grad():
             weights[weight_name][...] = weights_copy[weight_name] + upd_matrix.float()
         # Clear GPU memory
-        for x in [layer_ks, cur_zs, targets, layer_in_ks, layer_out_ks,P]:
+        # for x in [layer_ks, cur_zs, targets, layer_in_ks, layer_out_ks,P]:
+        for x in [layer_ks, cur_zs, targets, layer_in_ks,P]:
             x.cpu()
             del x
         torch.cuda.empty_cache()
