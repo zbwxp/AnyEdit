@@ -49,7 +49,7 @@ if __name__ == "__main__":
     # parser.add_argument('--file_path', default='output/AlphaEdit_ARE_Qwen2.5-7B-Instruct_unke_result.json', type=str)
     # parser.add_argument('--file_path', default='output/AlphaEdit_ARE_Qwen2.5-7B-Instruct_icl_unke_result.json', type=str)
     # parser.add_argument('--file_path', default='output/AlphaEdit_Qwen2.5-7B-Instruct_unke_result.json', type=str)
-    parser.add_argument('--file_path', default='output/AlphaEdit_ARE_Qwen3-4B-Instruct-2507_icl_unke_result.json', type=str)
+    parser.add_argument('--file_path', default='/root/code/AnyEdit/output/AlphaEdit_ARE_Qwen2.5-7B-Instruct_unke_result copy.json', type=str)
     parser.add_argument('--model_path', default='sentence-transformers/all-MiniLM-L6-v2', type=str)
     parser.add_argument('--device', default=0, type=int)
 
@@ -199,7 +199,7 @@ if __name__ == "__main__":
                 "temp_bert_score_para": temp_bert_score_para,
             }
         ]
-        with open('data_qwen2.5_icl.json', 'w') as file:
+        with open('data_qwen2.5_window1_iter341.json', 'w') as file:
             json.dump(temp_result, file)
         print("***********Result**************")
         print(matrics)
